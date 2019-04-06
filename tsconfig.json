@@ -9,7 +9,7 @@
         "strict": true,
         "forceConsistentCasingInFileNames": true,
         "noUnusedLocals": true,
-        "target": "es2018",
+        "target": "es5",
         "declaration": true
     },
     "include": [

@@ -1,8 +1,9 @@
-import fetch from 'node-fetch';
+// Function which represents and is executed as the desired request.
+type requestFunc = () => Promise<any>;
 
+// Objects that represent one request and which will be held in the queue.
 export interface Request {
-    url: string,
-    body?: object,
+    func: requestFunc,
     passPromise?: (promise: Promise<object>) => void
 }
 
@@ -30,11 +31,11 @@ export class RequestHandler {
      * @see this.sendQueue
      * @param request Request object with endpoint and parameters
      */
-    public get(request: Request): Promise<object> {
+    public get(func: requestFunc): Promise<object> {
         if (this.requestsLastPeriod < this.rateLim) {
-            return this.sendReq(request);
+            return this.sendReq(func);
         } else {
-            return this.sendQueue(request);
+            return this.sendQueue(func);
         }
     }
 
@@ -44,7 +45,7 @@ export class RequestHandler {
      * @param request the Request parameters to add to queue to send at later time
      * @returns Promise that resolves with request result, when request is handled
      */
-    private sendQueue(request: Request): Promise<object> {
+    private sendQueue(request: requestFunc): Promise<object> {
         // Queue request and inject function to get promise from sendReq method.
         return new Promise((res, rej) => {
             function passPromise(promise: Promise<object>): void {
@@ -53,7 +54,7 @@ export class RequestHandler {
                 }).catch(() => rej());
             }
             this.queue.push({
-                ...request,
+                func: request,
                 passPromise
             })
         });
@@ -69,11 +70,11 @@ export class RequestHandler {
      * @param retry 
      * @param trans 
      */
-    private async sendReq(request: Request, wait: number = this.periodLength, retry = 3, trans = (w: number) => w * 2): Promise<object> {
+    private async sendReq(request: requestFunc, wait: number = this.periodLength, retry = 3, trans = (w: number) => w * 2): Promise<object> {
         try {
-            const reqPromise = fetch(request.url);
+            const reqPromise = request();
             this.blockRequests();
-            return (await reqPromise).json();
+            return await reqPromise;
         } catch(e) {
             // If error, halt everything and retry 3 times with increasing intervals
             // Halt new requests from being executed, wait for x amount of ms, then retry y amount, while transforming
@@ -117,7 +118,7 @@ export class RequestHandler {
         while (this.requestsLastPeriod < this.rateLim && this.queue.length > 0) {
             // New requests should be popped off the queue here as long there is room for requests.
             const re = this.queue.shift();
-            if (re && re.passPromise) { re.passPromise(this.sendReq(re)) };
+            if (re && re.passPromise) { re.passPromise(this.sendReq(re.func)) };
         }
     }
 }

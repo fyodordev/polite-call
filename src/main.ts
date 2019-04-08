@@ -13,15 +13,19 @@ export class RequestHandler {
     // Set rate limit to 100 requests per second (+ 5ms to be safe).
     private rateLim: number = 100; // Maximum allowed nr. of request in period.
     private periodLength: number = 1005; // Length of period for which rateLim applies.
+    private retry = 3;
+    private trans = (w: number) => w * 2;
 
     // Number of requests made in the last period.
     private requestsLastPeriod: number = 0;
     // Queue of requests. Should be empty if requestsLastPeriod < rateLim
     private queue: Request[] = [];
 
-    constructor(rateLim: number, periodLength: number) {
+    constructor(rateLim: number, periodLength: number, trans?: (x: number) => number, retry?: number) {
         this.rateLim = rateLim;
         this.periodLength = periodLength;
+        if(trans) this.trans = trans;
+        if(retry) this.retry = retry;
     }
 
     /**
@@ -70,7 +74,7 @@ export class RequestHandler {
      * @param retry 
      * @param trans 
      */
-    private async sendReq(request: requestFunc, wait: number = this.periodLength, retry = 3, trans = (w: number) => w * 2): Promise<object> {
+    private async sendReq(request: requestFunc, wait: number = this.periodLength, retry = this.retry): Promise<object> {
         try {
             const reqPromise = request();
             this.blockRequests();
@@ -81,7 +85,7 @@ export class RequestHandler {
             // x with certain function. If unsuccessful after last try pass error upwards
             if (retry > 0) {
                 await this.blockRequests(this.rateLim, wait, () => {});
-                const result = await this.sendReq(request, trans(wait), --retry);
+                const result = await this.sendReq(request, this.trans(wait), --retry);
                 this.checkQueue();
                 return result;
             } else {

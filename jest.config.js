@@ -1,4 +1,9 @@
 module.exports = {
+    "testURL": "http://localhost/",
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/test/"
+    ],
     "roots": [
       "./"
     ],

@@ -7,6 +7,17 @@ export interface Request {
     passPromise?: (promise: Promise<object>) => void
 }
 
+// Ensures timeout is respected accurately by calling setTimeout multiple times if need be.
+async function timeout(func: () => any, waitTime: number): Promise<any> {
+    const startTime = Date.now();
+    let delta = 0;
+    do {
+        await new Promise((res) => setTimeout(() => res(), waitTime - delta));
+        delta = Date.now() - startTime;
+    } while(delta < waitTime);
+    return await func();
+}
+
 // Handle request, especially to respect rate limits. Errors concerning rate limit violation or connection
 // problem are handled here. Retry 3 times, after that pass error upwards.
 export class RequestHandler {
@@ -102,13 +113,10 @@ export class RequestHandler {
     private blockRequests(amount = 1, time = this.periodLength, fn = this.checkQueue): Promise<void> {
         this.requestsLastPeriod = this.requestsLastPeriod + amount;
         const instance: RequestHandler = this;
-        return new Promise((res) => {
-            setTimeout(() => {
-                instance.requestsLastPeriod = instance.requestsLastPeriod - amount;
-                fn.bind(instance)();
-                res();
-            }, time);
-        });
+        return timeout(() => {
+            instance.requestsLastPeriod = instance.requestsLastPeriod - amount;
+            fn.bind(instance)();
+        }, time);
     }
 
     /** Check if there's room for a requests, and if so pop it off the queue, execute request and pass promise
@@ -126,3 +134,4 @@ export class RequestHandler {
         }
     }
 }
+

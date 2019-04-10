@@ -1,4 +1,8 @@
 import { RequestHandler } from '../src/main';
+const rewire = require('rewire');
+
+const timeoutRewire = rewire('../lib/main');
+const timeout = timeoutRewire.__get__('timeout');
 
 const mockedFetch = jest.fn();
 mockedFetch.mockImplementation((url: string) => {
@@ -13,6 +17,17 @@ function policeRateLim(result: number[], rateLim: number, interval: number) {
     });
     return res;
 }
+
+describe('custom timeout function', () => {
+    const testArray = [...Array(30).keys()].map(i => 100);
+    testArray.forEach((t: number) => {
+        test('timeout is at least specified time', async () => {
+            const timeA = Date.now();
+            const timeB: number = (await timeout(() => Date.now(), t)) as number;
+            expect(timeB - timeA).toBeGreaterThanOrEqual(t);
+        });
+    })
+});
 
 describe('RequestHandler', () => {
     //Test by wrapping calls to fetch in a function that fails when there's too many requests in a certain time.

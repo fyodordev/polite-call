@@ -78,7 +78,7 @@ export class RequestHandler {
             function passPromise(promise: Promise<object>): void {
                 promise.then((val) => {
                     res(val);
-                }).catch(() => rej());
+                }).catch((e) => rej(e));
             }
             this.queue.push({
                 func: request,

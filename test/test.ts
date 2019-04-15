@@ -90,7 +90,7 @@ describe('RequestHandler', () => {
 
     test('Consecutive errors get retried with exponential backoff 3 times', async () => {
         mockedFetch.mockImplementation(() => {
-            throw new Error('error');
+            throw new Error('error123');
         });
 
         const reqHandler = new RequestHandler(3, 400);
@@ -108,7 +108,44 @@ describe('RequestHandler', () => {
         expect(delta).toBeLessThan(2900);
         expect(delta).toBeGreaterThan(2700)
         expect(error).toBeTruthy();
+        expect(error.message).toEqual('error123');
         expect(mockedFetch).toHaveBeenCalledTimes(4);
         expect(result.length).toEqual(0);
+    });
+
+    test('Requests return normally if resolved after backoff', async () => {
+        
+    });
+
+    test('Provided backoff function works as specified', async () => {
+        
+    });
+
+    test('When backoff stops from a queue, function passes error upward', async () => {
+        mockedFetch
+        .mockImplementationOnce((url) => {
+            return url; 
+        })
+        .mockImplementationOnce(() => {
+            throw new Error('error123');
+        });
+
+        const reqHandler = new RequestHandler(1, 20);
+        let error;
+        let result;
+        try{
+            result = await reqHandler.get(async () => {
+                return await mockedFetch(`test_url`);
+            });
+            await reqHandler.get(async () => {
+                return await mockedFetch(`test_url`);
+            });
+        } catch(e) {
+            error = e;
+        }
+        expect(error).toBeTruthy();
+        expect(error.message).toEqual('error123');
+        expect(result).toEqual('test_url');
+        expect(mockedFetch).toHaveBeenCalledTimes(5);
     });
 });

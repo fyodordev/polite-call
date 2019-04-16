@@ -88,7 +88,7 @@ describe('RequestHandler', () => {
 
     });
 
-    test('Consecutive errors get retried with exponential backoff 3 times', async () => {
+    test('Consecutive errors get retried with default exponential backoff 3 times', async () => {
         mockedFetch.mockImplementation(() => {
             throw new Error('error123');
         });
@@ -106,19 +106,45 @@ describe('RequestHandler', () => {
         }
         const delta = Date.now() - timeA;
         expect(delta).toBeLessThan(2900);
-        expect(delta).toBeGreaterThan(2700)
+        expect(delta).toBeGreaterThan(2700);
         expect(error).toBeTruthy();
         expect(error.message).toEqual('error123');
         expect(mockedFetch).toHaveBeenCalledTimes(4);
         expect(result.length).toEqual(0);
     });
 
-    test('Requests return normally if resolved after backoff', async () => {
+    test('Requests return normally if resolved after backoff and backoff as function argument works', async () => {
+        mockedFetch
+        .mockImplementationOnce(() => {
+            throw new Error('error123');
+        })
+        .mockImplementationOnce((url) => {
+            return url; 
+        });
         
-    });
+        const reqHandler = new RequestHandler(1, 300, (err, nr) => {
+            if (err.message === 'error123') {
+                return 1300;
+            } else {
+                return undefined;
+            }
+        });
 
-    test('Provided backoff function works as specified', async () => {
-        
+        let error;
+        let result;
+        const timeA = Date.now();
+        try{
+            result = await reqHandler.get(async () => {
+                return await mockedFetch(`test_url`);
+            });
+        } catch(e) {
+            error = e;
+        }
+        const delta = Date.now() - timeA;
+        expect(error).toBeFalsy();
+        expect(result).toEqual('test_url');
+        expect(mockedFetch).toHaveBeenCalledTimes(2);
+        expect(delta).toBeGreaterThan(1300);
     });
 
     test('When backoff stops from a queue, function passes error upward', async () => {

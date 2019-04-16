@@ -26,7 +26,7 @@ export class RequestHandler {
     private periodLength: number = 1005; // Length of period for which rateLim applies.
 
     // Backoff function. Takes number of previous attempts and error and calculates returns either wait time or undefined.
-    private getBackoff: (error: object, attemptNr: number) => number | undefined; // Backoff function on error
+    private getBackoff: (error: Error, attemptNr: number) => number | undefined; // Backoff function on error
 
     // Number of requests made in the last period.
     private requestsLastPeriod: number = 0;
@@ -34,7 +34,7 @@ export class RequestHandler {
     private queue: Request[] = [];
 
     // Backoff is either function that determines how long to wait for the next retry or number denoting the number of retries to make.
-    constructor(rateLim: number, periodLength: number, backoff: ((error: object, attemptNr: number) => number | undefined) | number = 3) {
+    constructor(rateLim: number, periodLength: number, backoff: ((error: Error, attemptNr: number) => number | undefined) | number = 3) {
         this.rateLim = rateLim;
         this.periodLength = periodLength;
 

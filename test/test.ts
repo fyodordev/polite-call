@@ -144,13 +144,17 @@ describe('RequestHandler', () => {
         expect(error).toBeFalsy();
         expect(result).toEqual('test_url');
         expect(mockedFetch).toHaveBeenCalledTimes(2);
-        expect(delta).toBeGreaterThan(1300);
+        expect(delta).toBeGreaterThanOrEqual(1300);
     });
 
-    test('When backoff stops from a queue, function passes error upward', async () => {
+    test('When backoff stops from a queue, function passes error upward, and promises work', async () => {
         mockedFetch
         .mockImplementationOnce((url) => {
-            return url; 
+            return new Promise((res, rej) => {
+                setTimeout(() => {
+                    res(url); 
+                });
+            });
         })
         .mockImplementationOnce(() => {
             throw new Error('error123');

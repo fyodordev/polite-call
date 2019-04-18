@@ -18,6 +18,16 @@ function policeRateLim(result: number[], rateLim: number, interval: number) {
     return res;
 }
 
+function getRange(result: number[]) {
+    const min = Math.min(...result);
+    const max = Math.max(...result);
+    if (min && max) {
+        return max - min;
+    } else {
+        throw new Error('should not be undefined');
+    }
+}
+
 describe('custom timeout function', () => {
     const testArray = [...Array(30).keys()].map(i => 100);
     testArray.forEach((t: number) => {
@@ -34,7 +44,7 @@ describe('RequestHandler', () => {
     // Parametrize both by nr. of reqs and interval to test the test also
     
     beforeEach(() => {
-        mockedFetch.mockClear();
+        mockedFetch.mockReset();
     });
 
     test('mock fetch is executed', async () => {
@@ -48,39 +58,34 @@ describe('RequestHandler', () => {
     });
 
     test('requests under limit are executed at once', async () => {
-        const reqHandler = new RequestHandler(3, 1000);
+        mockedFetch.mockImplementation(() => Date.now());
 
+        const reqHandler = new RequestHandler(3, 1000);
         const result: number[] = [];
         for(let i = 0; i  < 3; i++) {
             result.push(Number(await reqHandler.get(async () => {
                 return await mockedFetch(`url${i}`);
             })))
-            // await new Promise((res) => setTimeout(() => res(), 100));
         }
+
         expect(mockedFetch).toHaveBeenCalledTimes(3);
         expect(result.length).toBe(3);
         expect(mockedFetch).toHaveBeenNthCalledWith(1, 'url0');
         expect(mockedFetch).toHaveBeenNthCalledWith(2, 'url1');
         expect(mockedFetch).toHaveBeenNthCalledWith(3, 'url2');
 
-        const min = Math.min(...result);
-        const max = Math.max(...result);
-        if (min && max) {
-            expect(max - min).toBeLessThan(100);
-        } else {
-            throw new Error('should not be undefined');
-        }
+        expect(getRange(result)).toBeLessThan(200);
     });
 
     test('requests over limit are delayed', async () => {
-        const reqHandler = new RequestHandler(3, 1005);
+        mockedFetch.mockImplementation(() => Date.now());
 
+        const reqHandler = new RequestHandler(3, 1005);
         const result: number[] = [];
         for(let i = 0; i  < 9; i++) {
             result.push(Number(await reqHandler.get(async () => {
                 return await mockedFetch(`url${i}`);
             })));
-            // await new Promise((res) => setTimeout(() => res(), 100));
         }
         expect(mockedFetch).toHaveBeenCalledTimes(9);
         expect(result.length).toEqual(9);
@@ -88,39 +93,42 @@ describe('RequestHandler', () => {
 
     });
 
-    test('Consecutive errors get retried with default exponential backoff 3 times', async () => {
-        mockedFetch.mockImplementation(() => {
-            throw new Error('error123');
-        });
+    function testErrors(pLength: number, totalTime: number, timesCalled: number, retryArg?: number) {
+        test(`Retry on error with default exponential backoff ${retryArg} times`, async () => {
+            mockedFetch.mockImplementation(() => {
+                throw new Error('error123');
+            });
 
-        const reqHandler = new RequestHandler(3, 400);
-        const result: number[] = [];
-        let error;
-        const timeA = Date.now();
-        try{
-            result.push(Number(await reqHandler.get(async () => {
-                return await mockedFetch(`url`);
-            })));
-        } catch(e) {
-            error = e;
-        }
-        const delta = Date.now() - timeA;
-        expect(delta).toBeLessThan(2900);
-        expect(delta).toBeGreaterThan(2700);
-        expect(error).toBeTruthy();
-        expect(error.message).toEqual('error123');
-        expect(mockedFetch).toHaveBeenCalledTimes(4);
-        expect(result.length).toEqual(0);
-    });
+            const reqHandler = new RequestHandler(3, pLength, retryArg);
+            const result: number[] = [];
+            let error;
+            const timeA = Date.now();
+            try{
+                result.push(Number(await reqHandler.get(async () => {
+                    return await mockedFetch(`url`);
+                })));
+            } catch(e) {
+                error = e;
+            }
+            const delta = Date.now() - timeA;
+            expect(delta).toBeLessThan(totalTime + 100);
+            expect(delta).toBeGreaterThanOrEqual(totalTime);
+            expect(error).toBeTruthy();
+            expect(error.message).toEqual('error123');
+            expect(mockedFetch).toHaveBeenCalledTimes(timesCalled);
+            expect(result.length).toEqual(0);
+        });
+    }
+    testErrors(100, 700, 4);
+    testErrors(100, 3100, 6, 5);
+    testErrors(100, 0, 1, 0);
 
     test('Requests return normally if resolved after backoff and backoff as function argument works', async () => {
         mockedFetch
         .mockImplementationOnce(() => {
             throw new Error('error123');
         })
-        .mockImplementationOnce((url) => {
-            return url; 
-        });
+        .mockImplementationOnce((url) => url);
         
         const reqHandler = new RequestHandler(1, 300, (err, nr) => {
             if (err.message === 'error123') {
@@ -149,15 +157,15 @@ describe('RequestHandler', () => {
 
     test('When backoff stops from a queue, function passes error upward, and promises work', async () => {
         mockedFetch
+        .mockImplementation(() => {
+            throw new Error('error123');
+        })
         .mockImplementationOnce((url) => {
             return new Promise((res, rej) => {
                 setTimeout(() => {
                     res(url); 
                 });
             });
-        })
-        .mockImplementationOnce(() => {
-            throw new Error('error123');
         });
 
         const reqHandler = new RequestHandler(1, 20);

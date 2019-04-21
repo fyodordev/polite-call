@@ -5,14 +5,16 @@ export interface Request {
 }
 
 // Ensures timeout is respected accurately by calling setTimeout multiple times if need be.
-async function timeout(func: () => any, waitTime: number): Promise<any> {
-    const startTime = Date.now();
-    let delta = 0;
-    do {
-        await new Promise((res) => setTimeout(() => res(), waitTime - delta));
-        delta = Date.now() - startTime;
-    } while(delta < waitTime);
-    return await func();
+async function timeout(waitTime: number, func?: () => any): Promise<any> {
+    if (waitTime > 0) {
+        const startTime = Date.now();
+        let delta = 0;
+        do {
+            await new Promise((res) => setTimeout(() => res(), waitTime - delta));
+            delta = Date.now() - startTime;
+        } while(delta < waitTime);
+    }
+    return (func ? await func() : await undefined);
 }
 
 export class RequestHandler {
@@ -27,7 +29,7 @@ export class RequestHandler {
 
     // Backoff is either function that determines how long to wait for the next retry or number denoting the number of retries to make.
     constructor(rateLim: number, periodLength: number, backoff: ((error: Error, attemptNr: number) => number | undefined) | number = 3) {
-        this.rateLim = rateLim;
+        this.rateLim = (rateLim < 1 ? 1 : rateLim);
         this.periodLength = periodLength;
 
         if (typeof(backoff) === 'number') {
@@ -73,33 +75,34 @@ export class RequestHandler {
     private async sendReq(request: Function, attemptNr: number = 0): Promise<object> {
         try {
             const reqPromise = request();
-            this.blockRequests();
+            this.blockRequests(timeout(this.periodLength));
             return await reqPromise;
         } catch(e) {
             // If error, execute function to calculate backoff time.
             // Halt new all new requests from being executed, wait for x amount of ms, then retry y amount, while transforming
             // x with certain function. If unsuccessful after last try pass error upwards.
+
             const wait = this.getBackoff(e, attemptNr);
             if (wait) {
-                await this.blockRequests(this.rateLim, wait, () => {});
-                const result = await this.sendReq(request, attemptNr + 1);
-                this.checkQueue();
-                return result;
+                const result = timeout(wait, () => this.sendReq(request, attemptNr + 1));
+                this.blockRequests(result, this.rateLim)
+                return await result;
             } else {
+                // If getBackoff returns undefined that means no more retries should be made and error passed upward.
                 throw e;
             }
         }
     }
 
     // Add certain number to number of requests for certain period of time, then execute a function.
-    private async blockRequests(amount = 1, time = this.periodLength, fn = this.checkQueue): Promise<void> {
-        const instance: RequestHandler = this;
-        if (this.periodLength === 0) return await fn.bind(instance)();
+    private async blockRequests(promise: Promise<any>, amount = 1): Promise<void> {
         this.requestsLastPeriod = this.requestsLastPeriod + amount;
-        return timeout(() => {
-            instance.requestsLastPeriod = instance.requestsLastPeriod - amount;
-            fn.bind(instance)();
-        }, time);
+        try {
+            await promise;
+        } finally {
+            this.requestsLastPeriod = this.requestsLastPeriod - amount;
+            return await this.checkQueue();
+        }
     }
 
     // Check if there's room for a request, and if so pop it off the queue, execute request and pass promise.

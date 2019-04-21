@@ -18,6 +18,28 @@ function policeRateLim(result: number[], rateLim: number, interval: number) {
     return res;
 }
 
+//
+class Looper {
+    private goOn = true;
+    private func: Function;
+    private interval: number;
+    constructor(func: Function, interval = 5) {
+        this.func = func;
+        this.interval = interval;
+    }
+    public async startLoop() {
+        while(this.goOn) {
+            this.func();
+            await new Promise((res) => {
+                setTimeout(() => res(), this.interval);
+            })
+        }
+    }
+    public endLoop() {
+        this.goOn = false;
+    }
+}
+
 function getRange(result: number[]) {
     const min = Math.min(...result);
     const max = Math.max(...result);
@@ -33,10 +55,17 @@ describe('custom timeout function', () => {
     testArray.forEach((t: number) => {
         test('timeout is at least specified time', async () => {
             const timeA = Date.now();
-            const timeB: number = (await timeout(() => Date.now(), t)) as number;
+            const timeB: number = (await timeout(t, () => Date.now())) as number;
             expect(timeB - timeA).toBeGreaterThanOrEqual(t);
         });
-    })
+    });
+
+    test('timeout is at least specified time, works without function', async () => {
+        const timeA = Date.now();
+        await timeout(100);
+        const timeB = Date.now();
+        expect(timeB - timeA).toBeGreaterThanOrEqual(100);
+    });
 });
 
 describe('RequestHandler', () => {
@@ -50,31 +79,93 @@ describe('RequestHandler', () => {
     test('mock fetch is executed', async () => {
         const reqHandler = new RequestHandler(3, 1000);
 
-        await reqHandler.get(async () => {
+        await reqHandler.call(async () => {
             return await mockedFetch(`testurl`);
         });
 
         expect(mockedFetch).toHaveBeenCalledTimes(1);
     });
 
-    test('requests under limit are executed at once', async () => {
+    test('period length 0 executes requests at once', async () => {
         mockedFetch.mockImplementation(() => Date.now());
 
-        const reqHandler = new RequestHandler(3, 1000);
+        const reqHandler = new RequestHandler(0, 0);
         const result: number[] = [];
-        for(let i = 0; i  < 3; i++) {
-            result.push(Number(await reqHandler.get(async () => {
+        for(let i = 0; i  < 100; i++) {
+            result.push(Number(await reqHandler.call(async () => {
                 return await mockedFetch(`url${i}`);
             })))
         }
 
-        expect(mockedFetch).toHaveBeenCalledTimes(3);
-        expect(result.length).toBe(3);
+        expect(mockedFetch).toHaveBeenCalledTimes(100);
+        expect(result.length).toBe(100);
         expect(mockedFetch).toHaveBeenNthCalledWith(1, 'url0');
         expect(mockedFetch).toHaveBeenNthCalledWith(2, 'url1');
         expect(mockedFetch).toHaveBeenNthCalledWith(3, 'url2');
 
-        expect(getRange(result)).toBeLessThan(200);
+        expect(getRange(result)).toBeLessThan(50);
+    });
+
+    test('everything below rate limit executes at once', async () => {
+        mockedFetch.mockImplementation(() => Date.now());
+
+        const reqHandler = new RequestHandler(100, 1000);
+        const result: number[] = [];
+        for(let i = 0; i  < 100; i++) {
+            result.push(Number(await reqHandler.call(async () => {
+                return await mockedFetch(`url${i}`);
+            })))
+        }
+
+        expect(mockedFetch).toHaveBeenCalledTimes(100);
+        expect(result.length).toBe(100);
+        expect(mockedFetch).toHaveBeenNthCalledWith(1, 'url0');
+        expect(mockedFetch).toHaveBeenNthCalledWith(2, 'url1');
+        expect(mockedFetch).toHaveBeenNthCalledWith(3, 'url2');
+
+        expect(getRange(result)).toBeLessThan(50);
+    });
+
+    test('If an error occurs no other requests get through until error is resolved', async () => {
+        // test with period length 0
+        mockedFetch.mockImplementation(() => {
+            throw new Error('error123');
+        });
+        const secondFetch = jest.fn(() => Date.now());
+
+        //const reqHandler = new RequestHandler(1, 100);
+        const reqHandler = new RequestHandler(0, 0, (err, attempts) => {
+                if (attempts < 3) {
+                    return 100 * (2 ** attempts);
+                } else {
+                    return undefined;
+                }
+        });
+
+        const func = async () => reqHandler.call(() => secondFetch());
+        const looper = new Looper(func, 20);
+
+        let promise;
+        let error;
+        const timeA = Date.now();
+        try{
+            promise = reqHandler.call(async () => {
+                return await mockedFetch(`url`);
+            });
+            looper.startLoop();
+            await promise;
+        } catch(e) {
+            looper.endLoop();
+            error = e;
+        }
+        const delta = Date.now() - timeA;
+
+        expect(delta).toBeLessThan(800);
+        expect(delta).toBeGreaterThanOrEqual(700);
+        expect(error).toBeTruthy();
+        expect(error.message).toEqual('error123');
+        expect(mockedFetch).toHaveBeenCalledTimes(4);
+        expect(secondFetch.mock.calls.length).toBeLessThanOrEqual(2);
     });
 
     test('requests over limit are delayed', async () => {
@@ -83,7 +174,7 @@ describe('RequestHandler', () => {
         const reqHandler = new RequestHandler(3, 1005);
         const result: number[] = [];
         for(let i = 0; i  < 9; i++) {
-            result.push(Number(await reqHandler.get(async () => {
+            result.push(Number(await reqHandler.call(async () => {
                 return await mockedFetch(`url${i}`);
             })));
         }
@@ -104,7 +195,7 @@ describe('RequestHandler', () => {
             let error;
             const timeA = Date.now();
             try{
-                result.push(Number(await reqHandler.get(async () => {
+                result.push(Number(await reqHandler.call(async () => {
                     return await mockedFetch(`url`);
                 })));
             } catch(e) {
@@ -142,7 +233,7 @@ describe('RequestHandler', () => {
         let result;
         const timeA = Date.now();
         try{
-            result = await reqHandler.get(async () => {
+            result = await reqHandler.call(async () => {
                 return await mockedFetch(`test_url`);
             });
         } catch(e) {
@@ -172,12 +263,8 @@ describe('RequestHandler', () => {
         let error;
         let result;
         try{
-            result = await reqHandler.get(async () => {
-                return await mockedFetch(`test_url`);
-            });
-            await reqHandler.get(async () => {
-                return await mockedFetch(`test_url`);
-            });
+            result = await reqHandler.call(() => mockedFetch(`test_url`));
+            await reqHandler.call(() => mockedFetch(`test_url`));
         } catch(e) {
             error = e;
         }

@@ -1,5 +1,5 @@
 // Objects that represent one request and which will be held in the queue.
-export interface Request {
+interface Request {
     func: Function,
     passPromise?: (promise: Promise<object>) => void
 }
@@ -17,7 +17,7 @@ async function timeout(waitTime: number, func?: () => any): Promise<any> {
     return (func ? await func() : await undefined);
 }
 
-export class RequestHandler {
+export default class CallHandler {
     private rateLim: number; // Maximum allowed nr. of request in period.
     private periodLength: number; // Length of period for which rate limit applies.
     // Backoff function. Takes number of previous attempts and error and calculates returns either wait time or undefined.

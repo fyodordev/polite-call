@@ -1,17 +1,43 @@
 {
-  "name": "request-handler",
+  "name": "polite-call",
   "version": "1.0.0",
-  "description": "",
+  "description": "Simple rate limiting and backoff function implementation",
+  "author": {
+    "name": "Fedor Perejoguine",
+    "email": "fyodor.perejoguine@gmail.com",
+    "url": "https://github.com/fyodordev"
+  },
+  "bugs": {
+    "url": "https://github.com/fyodordev/polite-call/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fyodordev/polite-call.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "rate",
+    "limit",
+    "limiter",
+    "limiting",
+    "exponential",
+    "backoff",
+    "polite",
+    "call",
+    "api",
+    "timing",
+    "error",
+    "handling"
+  ],
   "main": "index.js",
-  "directories": {
-    "test": "test"
-  },
+  "typings": "index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "test": "jest --coverage"
+    "builddeclaration": "tsc --declaration --emitDeclarationOnly",
+    "build": "tsc --sourceMap",
+    "cleanbuild": "tsc",
+    "fullbuild": "rm -rf ./dist && mkdir dist && npm run cleanbuild && cp ./LICENSE ./dist/ && cp ./package.json ./dist/ && cp ./README.md ./dist/ && cp ./src/index.d.ts ./dist/",
+    "test": "npm run build && jest --coverage"
   },
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
     "@types/jest": "^24.0.11",
     "@types/node": "^11.13.4",
@@ -20,6 +46,5 @@
     "rewire": "^4.0.1",
     "ts-jest": "^24.0.2",
     "typescript": "^3.4.2"
-  },
-  "dependencies": {}
+  }
 }

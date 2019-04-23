@@ -2,7 +2,8 @@ module.exports = {
     "testURL": "http://localhost/",
     "coveragePathIgnorePatterns": [
       "/node_modules/",
-      "/test/"
+      "/test/",
+      "/dist/"
     ],
     "roots": [
       "./"

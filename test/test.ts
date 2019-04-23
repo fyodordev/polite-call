@@ -1,7 +1,7 @@
-import { RequestHandler } from '../src/main';
+import CallHandler from '../src/index';
 const rewire = require('rewire');
 
-const timeoutRewire = rewire('../lib/main');
+const timeoutRewire = rewire('../dist/index');
 const timeout = timeoutRewire.__get__('timeout');
 
 const mockedFetch = jest.fn();
@@ -77,7 +77,7 @@ describe('RequestHandler', () => {
     });
 
     test('mock fetch is executed', async () => {
-        const reqHandler = new RequestHandler(3, 1000);
+        const reqHandler = new CallHandler(3, 1000);
 
         await reqHandler.call(async () => {
             return await mockedFetch(`testurl`);
@@ -89,7 +89,7 @@ describe('RequestHandler', () => {
     test('period length 0 executes requests at once', async () => {
         mockedFetch.mockImplementation(() => Date.now());
 
-        const reqHandler = new RequestHandler(0, 0);
+        const reqHandler = new CallHandler(0, 0);
         const result: number[] = [];
         for(let i = 0; i  < 100; i++) {
             result.push(Number(await reqHandler.call(async () => {
@@ -109,7 +109,7 @@ describe('RequestHandler', () => {
     test('everything below rate limit executes at once', async () => {
         mockedFetch.mockImplementation(() => Date.now());
 
-        const reqHandler = new RequestHandler(100, 1000);
+        const reqHandler = new CallHandler(100, 1000);
         const result: number[] = [];
         for(let i = 0; i  < 100; i++) {
             result.push(Number(await reqHandler.call(async () => {
@@ -134,7 +134,7 @@ describe('RequestHandler', () => {
         const secondFetch = jest.fn(() => Date.now());
 
         //const reqHandler = new RequestHandler(1, 100);
-        const reqHandler = new RequestHandler(0, 0, (err, attempts) => {
+        const reqHandler = new CallHandler(0, 0, (err, attempts) => {
                 if (attempts < 3) {
                     return 100 * (2 ** attempts);
                 } else {
@@ -171,7 +171,7 @@ describe('RequestHandler', () => {
     test('requests over limit are delayed', async () => {
         mockedFetch.mockImplementation(() => Date.now());
 
-        const reqHandler = new RequestHandler(3, 1005);
+        const reqHandler = new CallHandler(3, 1005);
         const result: number[] = [];
         for(let i = 0; i  < 9; i++) {
             result.push(Number(await reqHandler.call(async () => {
@@ -190,7 +190,7 @@ describe('RequestHandler', () => {
                 throw new Error('error123');
             });
 
-            const reqHandler = new RequestHandler(3, pLength, retryArg);
+            const reqHandler = new CallHandler(3, pLength, retryArg);
             const result: number[] = [];
             let error;
             const timeA = Date.now();
@@ -221,7 +221,7 @@ describe('RequestHandler', () => {
         })
         .mockImplementationOnce((url) => url);
         
-        const reqHandler = new RequestHandler(1, 300, (err, nr) => {
+        const reqHandler = new CallHandler(1, 300, (err, nr) => {
             if (err.message === 'error123') {
                 return 1300;
             } else {
@@ -259,7 +259,7 @@ describe('RequestHandler', () => {
             });
         });
 
-        const reqHandler = new RequestHandler(1, 20);
+        const reqHandler = new CallHandler(1, 20);
         let error;
         let result;
         try{

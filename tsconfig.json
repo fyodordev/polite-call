@@ -3,14 +3,14 @@
         "module": "commonjs",
         "removeComments": true,
         "preserveConstEnums": true,
-        "outDir": "./lib",
-        "sourceMap": true,
+        "outDir": "./dist",
+        //"sourceMap": true,
         "noImplicitReturns": true,
         "strict": true,
         "forceConsistentCasingInFileNames": true,
         "noUnusedLocals": true,
-        "target": "es2018",
-        "declaration": true
+        "target": "es2018"
+        //"declaration": true
     },
     "include": [
         "./src/**/*"

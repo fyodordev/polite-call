@@ -2,7 +2,11 @@
 
 [![NPM](https://nodei.co/npm/polite-call.png)](https://nodei.co/npm/polite-call/)
 
+![Travis (.org)](https://img.shields.io/travis/fyodordev/polite-call.svg)
+![Codecov](https://img.shields.io/codecov/c/github/fyodordev/polite-call.svg?token=395d28fc31a843eeb81d195275919185)
 [![Install Size](https://packagephobia.now.sh/badge?p=polite-call)](https://packagephobia.now.sh/result?p=polite-call)
+![GitHub](https://img.shields.io/github/license/fyodordev/polite-call.svg)
+![npm](https://img.shields.io/npm/v/polite-call.svg)
 
 Simple, light-weight module to implement rate limiting and a backoff function at the same time. Mostly intended for REST API calls,
 however it can wrap any function you like to limit its call rate and backoff on error.

@@ -142,7 +142,12 @@ describe('RequestHandler', () => {
                 }
         });
 
-        const func = async () => reqHandler.call(() => secondFetch());
+        let errcount = 0;
+        const func = async () => reqHandler.call(() => secondFetch())
+        .catch((e) => {
+            errcount += 1;
+        });
+
         const looper = new Looper(func, 20);
 
         let promise;
@@ -159,7 +164,8 @@ describe('RequestHandler', () => {
             error = e;
         }
         const delta = Date.now() - timeA;
-
+        await new Promise((res) => setTimeout(() => res(), 1000));
+        expect(errcount).toBeGreaterThan(30);
         expect(delta).toBeLessThan(800);
         expect(delta).toBeGreaterThanOrEqual(700);
         expect(error).toBeTruthy();

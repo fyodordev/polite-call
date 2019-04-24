@@ -85,7 +85,7 @@ export default class CallHandler {
             const wait = this.getBackoff(e, attemptNr);
             if (wait) {
                 const result = timeout(wait, () => this.sendReq(request, attemptNr + 1));
-                this.blockRequests(result, this.rateLim)
+                if (attemptNr === 0) this.blockRequests(result, this.rateLim);
                 return await result;
             } else {
                 // If getBackoff returns undefined that means no more retries should be made and error passed upward.
@@ -99,9 +99,20 @@ export default class CallHandler {
         this.requestsLastPeriod = this.requestsLastPeriod + amount;
         try {
             await promise;
-        } finally {
             this.requestsLastPeriod = this.requestsLastPeriod - amount;
             return await this.checkQueue();
+        } catch (e) {
+            this.requestsLastPeriod = this.requestsLastPeriod - amount;
+            return await this.flushQueue(e);
+        } 
+    }
+
+    // Remove all requests from the queue and reject their promises with the provided Error.
+    private flushQueue(reason: Error) {
+        while (this.queue.length > 0) {
+            // Pop requests off the queue and reject their promise
+            const re = this.queue.shift();
+            if (re && re.passPromise) { re.passPromise(new Promise((res, rej) => rej(reason))) };
         }
     }
 

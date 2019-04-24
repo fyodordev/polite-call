@@ -4,7 +4,7 @@
   "description": "Simple rate limiting and backoff function implementation",
   "author": {
     "name": "Fedor Perejoguine",
-    "email": "fyodor.perejoguine@gmail.com",
+    "email": "fyodordev@gmail.com",
     "url": "https://github.com/fyodordev"
   },
   "bugs": {

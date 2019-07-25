@@ -1,7 +1,7 @@
 // Objects that represent one request and which will be held in the queue.
 interface Request {
-    func: Function,
-    passPromise?: (promise: Promise<object>) => void
+    func: Function;
+    passPromise?: (promise: Promise<object>) => void;
 }
 
 // Ensures timeout is respected accurately by calling setTimeout multiple times if need be.
@@ -10,9 +10,9 @@ async function timeout(waitTime: number, func?: () => any): Promise<any> {
         const startTime = Date.now();
         let delta = 0;
         do {
-            await new Promise((res) => setTimeout(() => res(), waitTime - delta));
+            await new Promise(res => setTimeout(() => res(), waitTime - delta));
             delta = Date.now() - startTime;
-        } while(delta < waitTime);
+        } while (delta < waitTime);
     }
     return (func ? await func() : await undefined);
 }
@@ -20,15 +20,19 @@ async function timeout(waitTime: number, func?: () => any): Promise<any> {
 export default class CallHandler {
     private rateLim: number; // Maximum allowed nr. of request in period.
     private periodLength: number; // Length of period for which rate limit applies.
-    // Backoff function. Takes number of previous attempts and error and calculates returns either wait time or undefined.
-    private getBackoff: (error: Error, attemptNr: number) => number | undefined; // Backoff function on error
+    // Backoff function. Takes number of previous attempts and error and calculates returns either
+    // wait time or undefined.
+    private getBackoff: (error: Error, attemptNr: number) => number | undefined;
     // Number of requests made in the last period.
     private requestsLastPeriod = 0;
     // Queue of requests. Should be empty if requestsLastPeriod < rateLim
     private queue: Request[] = [];
 
-    // Backoff is either function that determines how long to wait for the next retry or number denoting the number of retries to make.
-    constructor(rateLim: number, periodLength: number, backoff: ((error: Error, attemptNr: number) => number | undefined) | number = 3) {
+    // Backoff is either function that determines how long to wait for the next retry or number
+    // denoting the number of retries to make.
+    constructor(rateLim: number,
+                periodLength: number,
+                backoff: ((error: Error, attemptNr: number) => number | undefined) | number = 3) {
         this.rateLim = (rateLim < 1 ? 1 : rateLim);
         this.periodLength = periodLength;
 
@@ -36,16 +40,16 @@ export default class CallHandler {
             this.getBackoff = (e: Error, attemptNr: number) => {
                 if (attemptNr < backoff) {
                     return periodLength * (2 ** attemptNr);
-                } else {
-                    return undefined;
                 }
-            }
+                return;
+            };
         } else {
             this.getBackoff = backoff;
         }
     }
 
-    // Execute a function after rate limit has been respected and return either result or error after retries. 
+    // Execute a function after rate limit has been respected and return either result or error
+    // after the specified amount of retries.
     public call(func: Function): Promise<object> {
         // Decide whether to send request now or add to queue
         if (this.requestsLastPeriod < this.rateLim) {
@@ -60,37 +64,41 @@ export default class CallHandler {
         // Queue request and inject function to get promise from sendReq method.
         return new Promise((res, rej) => {
             function passPromise(promise: Promise<object>): void {
-                promise.then((val) => {
+                promise
+                .then((val) => {
                     res(val);
-                }).catch((e) => rej(e));
+                })
+                .catch(e => rej(e));
             }
             this.queue.push({
+                passPromise,
                 func: request,
-                passPromise
-            })
+            });
         });
     }
 
-    //Call function immediately, and retry on error according to the backoff function. 
+    // Call function immediately, and retry on error according to the backoff function.
     private async sendReq(request: Function, attemptNr: number = 0): Promise<object> {
         try {
             const reqPromise = request();
             this.blockRequests(timeout(this.periodLength));
             return await reqPromise;
-        } catch(e) {
+        } catch (e) {
             // If error, execute function to calculate backoff time.
-            // Halt new all new requests from being executed, wait for x amount of ms, then retry y amount, while transforming
-            // x with certain function. If unsuccessful after last try pass error upwards.
-
+            // Halt new all new requests from being executed, wait for x amount of ms,
+            // then retry y amount, while transforming x with certain function.
+            // If unsuccessful after last try pass error upwards.
             const wait = this.getBackoff(e, attemptNr);
             if (wait) {
                 const result = timeout(wait, () => this.sendReq(request, attemptNr + 1));
-                if (attemptNr === 0) this.blockRequests(result, this.rateLim);
+                if (attemptNr === 0) {
+                    this.blockRequests(result, this.rateLim);
+                }
                 return await result;
-            } else {
-                // If getBackoff returns undefined that means no more retries should be made and error passed upward.
-                throw e;
             }
+            // If getBackoff returns undefined that means no more retries should be made
+            // and error is passed upward.
+            throw e;
         }
     }
 
@@ -104,7 +112,7 @@ export default class CallHandler {
         } catch (e) {
             this.requestsLastPeriod = this.requestsLastPeriod - amount;
             return await this.flushQueue(e);
-        } 
+        }
     }
 
     // Remove all requests from the queue and reject their promises with the provided Error.
@@ -112,17 +120,21 @@ export default class CallHandler {
         while (this.queue.length > 0) {
             // Pop requests off the queue and reject their promise
             const re = this.queue.shift();
-            if (re && re.passPromise) { re.passPromise(new Promise((res, rej) => rej(reason))) };
+            if (re && re.passPromise) {
+                re.passPromise(new Promise((res, rej) => rej(reason)));
+            }
         }
     }
 
-    // Check if there's room for a request, and if so pop it off the queue, execute request and pass promise.
-    // Do so as long as there is room for requests which are still in the queue.
+    // Check if there's room for a request, and if so pop it off the queue, execute request
+    // and pass promise. Do so as long as there is room for requests which are still in the queue.
     private checkQueue() {
         while (this.requestsLastPeriod < this.rateLim && this.queue.length > 0) {
             // New requests should be popped off the queue here as long there is room for requests.
             const re = this.queue.shift();
-            if (re && re.passPromise) { re.passPromise(this.sendReq(re.func)) };
+            if (re && re.passPromise) {
+                re.passPromise(this.sendReq(re.func));
+            }
         }
     }
 }

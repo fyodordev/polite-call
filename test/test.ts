@@ -190,6 +190,40 @@ describe('RequestHandler', () => {
 
     });
 
+    test('requests over limit launched asynchronously are delayed', async () => {
+        mockedFetch.mockImplementation(() => Date.now());
+
+        const reqHandler = new CallHandler(3, 1005);
+        const numbers: number[] = [];
+        const result: number[] = [];
+        result.push(Date.now());
+
+        for(let i = 0; i  < 8; i++) {
+            numbers.push(i); 
+        }
+
+        const testF = async () => {
+            for(let i = 0; i < 3; i++) {
+                //@ts-ignore
+                result.push(await reqHandler.call(() => mockedFetch(`url${4}`)));
+            }
+        }
+
+        await Promise.all(numbers.map(number => {
+            return testF();
+        }));
+
+        const times = [];
+        for(let i = 1; i < result.length; i++) {
+            times.push(result[i] - result[i-1]);
+        }
+        expect(mockedFetch).toHaveBeenCalledTimes(24);
+        expect(result.length).toEqual(25);
+        expect(policeRateLim(result, 10, 1005)).toEqual(true);
+
+    }, 20000);
+
+
     function testErrors(pLength: number, totalTime: number, timesCalled: number, retryArg?: number) {
         test(`Retry on error with default exponential backoff ${retryArg} times`, async () => {
             mockedFetch.mockImplementation(() => {
